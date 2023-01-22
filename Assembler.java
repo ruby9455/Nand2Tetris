@@ -34,6 +34,8 @@ enum InstructionComp {
 }
 
 public class Assembler {
+    private static int nextAvailablePos = 16;
+    private static int lineNumber = 0;
 
     /**
      * Assembler first pass; populates symbol table with label locations.
@@ -43,6 +45,22 @@ public class Assembler {
      */
     public static void doFirstPass(String[] instructions, SymbolTable symbolTable) {
         // Your code here
+        for (int i = 0; i < instructions.length; i++) {
+            if (instructions[i].charAt(0) == '(') { // if is label
+                // create the label's symbol by removing space the ()
+                String label = instructions[i].trim().substring(instructions[i].indexOf("(") + 1,
+                        instructions[i].lastIndexOf(")")).trim().replaceAll(" ", "");
+                // add label if it is not in SymbolTable
+                if (SymbolTable.getSymbol(label) == -1) {
+                    // System.out.println(label + " is not found in Symbol Table, calling
+                    // addSymbol");
+                    // System.out.println("Current Line: " + lineNumber);
+                    SymbolTable.addSymbol(label, lineNumber);
+                }
+                lineNumber--;
+            }
+            lineNumber++;
+        }
     }
 
     /**
@@ -55,8 +73,74 @@ public class Assembler {
      *         binary instructions.
      */
     public static String doSecondPass(String[] instructions, SymbolTable symbolTable) {
+        String result = "";
+        int line = 0;
         // Your code here
-        return ""; // replace this
+        // System.out.println("----------Second Pass----------");
+        for (String instruction : instructions) {
+            // System.out.println(instruction);
+            if (instruction.trim().charAt(0) == '@') { // a-instruction
+                // System.out.println("It's A-instruction");
+                // System.out.println("Instruction before trimming: " + instruction);
+                String variable = instruction.trim().substring(instruction.indexOf("@") + 1,
+                        instruction.length()).replaceAll(" ", "");
+                // System.out.println("Instruction after trimming: " + variable);
+                // System.out.println(translateSymbol(variable, symbolTable));
+                try {
+                    Integer.parseInt(variable);
+                    if (line == 0)
+                        result = result + "0" + translateSymbol(variable, symbolTable);
+                    else
+                        result = result + "\n0" + translateSymbol(variable, symbolTable);
+
+                } catch (NumberFormatException e) {
+                    if (SymbolTable.getSymbol(variable) == -1) {
+                        // if (translateSymbol(variable, symbolTable) == "-1") {
+                        // System.out.println(variable + " is NOT in Symbol Table");
+                        SymbolTable.addSymbol(variable, nextAvailablePos);
+                        nextAvailablePos++;
+                    }
+                    if (line == 0)
+                        result = result + "0" + translateSymbol(variable, symbolTable);
+                    else
+                        result = result + "\n0" + translateSymbol(variable, symbolTable);
+                }
+                /*
+                 * if (line != instructions.length - 1)
+                 * result = result + "0" + translateSymbol(variable, symbolTable) + "\n";
+                 * else
+                 * result = result + "0" + translateSymbol(variable, symbolTable);
+                 */
+                // return result;
+            } else if (instruction.charAt(0) == '(') {
+                // System.out.println("It's L-instruction");
+                result = result + "";
+                line--;
+                // return "";
+            } else { // c-instruction
+                if (line == 0)
+                    result = result + "111" + translateComp(parseInstructionComp(instruction))
+                            + translateDest(parseInstructionDest(instruction))
+                            + translateJump(parseInstructionJump(instruction));
+                else
+                    result = result + "\n111" + translateComp(parseInstructionComp(instruction))
+                            + translateDest(parseInstructionDest(instruction))
+                            + translateJump(parseInstructionJump(instruction));
+                /*
+                 * if (line != instructions.length - 1) {
+                 * result += "111" + translateComp(parseInstructionComp(instruction))
+                 * + translateDest(parseInstructionDest(instruction))
+                 * + translateJump(parseInstructionJump(instruction)) + "\n";
+                 * } else {
+                 * result += "111" + translateComp(parseInstructionComp(instruction))
+                 * + translateDest(parseInstructionDest(instruction))
+                 * + translateJump(parseInstructionJump(instruction));
+                 * }
+                 */
+            }
+            line++;
+        }
+        return result; // replace this
     }
 
     /**
@@ -68,7 +152,34 @@ public class Assembler {
      */
     public static InstructionType parseInstructionType(String instruction) {
         // Your code here
-        return InstructionType.NULL;
+        // System.out.println(instruction);
+        // System.out.println("----------parseInstructionType----------");
+        // preparing for c-instruction
+        // Matcher matcher = Pattern.compile(".*=;.*").matcher(instruction);
+        // Matcher matcher2 = Pattern.compile(".*;.*").matcher(instruction);
+
+        // boolean matches = matcher.matches();
+        // boolean matches2 = matcher2.matches();
+        // a-instruction
+        if (instruction.charAt(0) == '@') {
+            // System.out.println("Result: A-instruction");
+            return InstructionType.A_INSTRUCTION;
+        }
+        // label
+        else if (instruction.charAt(0) == '(') {
+            // System.out.println("Result: L-instruction");
+            return InstructionType.L_INSTRUCTION;
+        }
+        // c-instruction
+        /*
+         * else if (matches == true || matches2 == true) {
+         * // System.out.println("Result: C-instruction");
+         * return InstructionType.C_INSTRUCTION;
+         * }
+         * return InstructionType.NULL;
+         */
+        // System.out.println("Result: C-instruction: " + instruction);
+        return InstructionType.C_INSTRUCTION;
     }
 
     /**
@@ -78,7 +189,45 @@ public class Assembler {
      * @return The destination of the instruction (A, D, M, AM, AD, MD, AMD, NULL)
      */
     public static InstructionDest parseInstructionDest(String instruction) {
+        // System.out.println("----------parseInstructionDest----------");
         // Your code here
+        if (parseInstructionType(instruction) == InstructionType.A_INSTRUCTION) {
+            // System.out.println("Destination for A-instruction");
+            return InstructionDest.A;
+        } else if (parseInstructionType(instruction) == InstructionType.C_INSTRUCTION) {
+            // System.out.println("Destination for C-instruction");
+            // split the C-instruction at "="
+            if (instruction.contains("=")) {
+                String dest = instruction.split("=")[0].trim().replaceAll(" ", "");
+                // System.out.println(dest);
+
+                Matcher matcherAMD = Pattern.compile("AMD").matcher(dest);
+                Matcher matcherAM = Pattern.compile("AM").matcher(dest);
+                // Matcher matcherMA = Pattern.compile(".*MA.*").matcher(dest);
+                Matcher matcherAD = Pattern.compile("AD").matcher(dest);
+                // Matcher matcherDA = Pattern.compile(".*DA.*").matcher(dest);
+                Matcher matcherMD = Pattern.compile("MD").matcher(dest);
+                // Matcher matcherDM = Pattern.compile(".*DM.*").matcher(dest);
+                Matcher matcherA = Pattern.compile("A").matcher(dest);
+                Matcher matcherM = Pattern.compile("M").matcher(dest);
+                Matcher matcherD = Pattern.compile("D").matcher(dest);
+
+                if (matcherAMD.matches() == true)
+                    return InstructionDest.AMD;
+                else if (matcherAM.matches() == true)
+                    return InstructionDest.AM;
+                else if (matcherAD.matches() == true)
+                    return InstructionDest.AD;
+                else if (matcherMD.matches() == true)
+                    return InstructionDest.MD;
+                else if (matcherA.matches() == true)
+                    return InstructionDest.A;
+                else if (matcherM.matches() == true)
+                    return InstructionDest.M;
+                else if (matcherD.matches() == true)
+                    return InstructionDest.D;
+            }
+        }
         return InstructionDest.NULL;
     }
 
@@ -91,6 +240,29 @@ public class Assembler {
      */
     public static InstructionJump parseInstructionJump(String instruction) {
         // Your code here
+        if (instruction.contains(";")) {
+            String[] parts = instruction.trim().replaceAll(" ", "").split(";");
+            String jump = parts[1].split("/")[0].trim().replaceAll(" ", "");
+            switch (jump) {
+                case "JLT":
+                    return InstructionJump.JLT;
+                case "JGT":
+                    return InstructionJump.JGT;
+                case "JEQ":
+                    return InstructionJump.JEQ;
+                case "JLE":
+                    return InstructionJump.JLE;
+                case "JGE":
+                    return InstructionJump.JGE;
+                case "JNE":
+                    return InstructionJump.JNE;
+                case "JMP":
+                    return InstructionJump.JMP;
+                case "null":
+                default:
+                    return InstructionJump.NULL;
+            }
+        }
         return InstructionJump.NULL;
     }
 
@@ -102,8 +274,87 @@ public class Assembler {
      *         ... , NULL)
      */
     public static InstructionComp parseInstructionComp(String instruction) {
+        String comp;
+        // System.out.println("-----------parseInstructionComp-----------");
         // Your code here
-        return InstructionComp.NULL;
+        // if (matcherEq.matches() == true) {
+        if (instruction.contains("=")) {
+            String[] parts = instruction.trim().split("=");
+            comp = parts[1].split("/")[0].split(";")[0].trim().replaceAll(" ", "");
+        } else if (instruction.contains(";")) {
+            comp = instruction.trim().split("/")[0].split(";")[0].replaceAll(" ", "");
+        } else {
+            comp = instruction;
+            // System.out.println(comp);
+        }
+
+        switch (comp) {
+            case "0":
+                // System.out.println("It's a zero");
+                return InstructionComp.CONST_0;
+            case "1":
+                return InstructionComp.CONST_1;
+            case "-1":
+                return InstructionComp.CONST_NEG_1;
+            case "D":
+                return InstructionComp.D;
+            case "A":
+                return InstructionComp.A;
+            case "!D":
+                return InstructionComp.NOT_D;
+            case "!A":
+                return InstructionComp.NOT_A;
+            case "-D":
+                return InstructionComp.NEG_D;
+            case "-A":
+                return InstructionComp.NEG_A;
+            case "D+1":
+                return InstructionComp.D_ADD_1;
+            case "A+1":
+                return InstructionComp.A_ADD_1;
+            case "D-1":
+                return InstructionComp.D_SUB_1;
+            case "A-1":
+                return InstructionComp.A_SUB_1;
+            case "D+A":
+            case "A+D":
+                return InstructionComp.D_ADD_A;
+            case "D-A":
+                return InstructionComp.D_SUB_A;
+            case "A-D":
+                return InstructionComp.A_SUB_D;
+            case "D&A":
+                return InstructionComp.D_AND_A;
+            case "D|A":
+                return InstructionComp.D_OR_A;
+            case "M":
+                return InstructionComp.M;
+            case "!M":
+                return InstructionComp.NOT_M;
+            case "-M":
+                // System.out.println("-M");
+                return InstructionComp.NEG_M;
+            case "M+1":
+            case "1+M":
+                return InstructionComp.M_ADD_1;
+            case "M-1":
+                return InstructionComp.M_SUB_1;
+            case "D+M":
+            case "M+D":
+                return InstructionComp.D_ADD_M;
+            case "D-M":
+                return InstructionComp.D_SUB_M;
+            case "M-D":
+                return InstructionComp.M_SUB_D;
+            case "D&M":
+            case "M&D":
+                return InstructionComp.D_AND_M;
+            case "D|M":
+            case "M|D":
+                return InstructionComp.D_OR_M;
+            default:
+                return InstructionComp.NULL;
+        }
     }
 
     /**
@@ -115,7 +366,17 @@ public class Assembler {
      *         (A-instruction)
      */
     public static String parseSymbol(String instruction) {
+        // System.out.println("parseSymbol is called");
         // Your code here
+        if (parseInstructionType(instruction) == InstructionType.L_INSTRUCTION) {
+            String label = instruction.trim().replaceAll(" ", "").substring(instruction.indexOf("(") + 1,
+                    instruction.lastIndexOf(")"));
+            // System.out.println(label);
+            return label;
+        } else if (parseInstructionType(instruction) == InstructionType.A_INSTRUCTION) {
+            String s = instruction.split("@")[1].trim().replaceAll(" ", "");
+            return s;
+        }
         return "";
     }
 
@@ -128,7 +389,24 @@ public class Assembler {
      */
     public static String translateDest(InstructionDest dest) {
         // Your code here
-        return "000";
+        switch (dest) {
+            case A:
+                return "100";
+            case AD:
+                return "110";
+            case AM:
+                return "101";
+            case AMD:
+                return "111";
+            case D:
+                return "010";
+            case M:
+                return "001";
+            case MD:
+                return "011";
+            default:
+                return "000";
+        }
     }
 
     /**
@@ -140,7 +418,24 @@ public class Assembler {
      */
     public static String translateJump(InstructionJump jump) {
         // Your code here
-        return "000";
+        switch (jump) {
+            case JGT:
+                return "001";
+            case JEQ:
+                return "010";
+            case JGE:
+                return "011";
+            case JLT:
+                return "100";
+            case JNE:
+                return "101";
+            case JLE:
+                return "110";
+            case JMP:
+                return "111";
+            default:
+                return "000";
+        }
     }
 
     /**
@@ -151,8 +446,70 @@ public class Assembler {
      *         correspond to the given comp value.
      */
     public static String translateComp(InstructionComp comp) {
+        // System.out.println("-----------translateComp-----------");
         // Your code here
-        return "0000000";
+        switch (comp) {
+            case CONST_0:
+                // System.out.println("It's a zero");
+                return "0101010";
+            case CONST_1:
+                return "0111111";
+            case CONST_NEG_1:
+                return "0111010";
+            case D:
+                return "0001100";
+            case A:
+                return "0110000";
+            case NOT_D:
+                return "0001101";
+            case NOT_A:
+                return "0110001";
+            case NEG_D:
+                return "0001111";
+            case NEG_A:
+                return "0110011";
+            case D_ADD_1:
+                return "0011111";
+            case A_ADD_1:
+                return "0110111";
+            case D_SUB_1:
+                return "0001110";
+            case A_SUB_1:
+                return "0110010";
+            case D_ADD_A:
+                return "0000010";
+            case D_SUB_A:
+                return "0010011";
+            case A_SUB_D:
+                return "0000111";
+            case D_AND_A:
+                return "0000000";
+            case D_OR_A:
+                return "0010101";
+            case M:
+                return "1110000";
+            case NOT_M:
+                return "1110001";
+            case NEG_M:
+                // System.out.println("1110011");
+                return "1110011";
+            case M_ADD_1:
+                return "1110111";
+            case M_SUB_1:
+                return "1110010";
+            case D_ADD_M:
+                return "1000010";
+            case D_SUB_M:
+                return "1010011";
+            case M_SUB_D:
+                return "1000111";
+            case D_AND_M:
+                return "1000000";
+            case D_OR_M:
+                return "1010101";
+            default:
+                return "0000000";
+        }
     }
 
     /**
@@ -167,12 +524,40 @@ public class Assembler {
      */
     public static String translateSymbol(String symbol, SymbolTable symbolTable) {
         // Your code here
-        return "000000000000000";
+        String binary = "";
+        try { // A-instruction
+            int decimal = Integer.parseInt(symbol);
+            while (decimal > 0) {
+                binary = String.valueOf(decimal % 2) + binary;
+                decimal = decimal / 2;
+            }
+            // turn n-bits binary into 16-bits
+            int diff = 15 - binary.length();
+            for (int i = 0; i < diff; i++) {
+                binary = "0" + binary;
+            }
+            return binary;
+        } catch (NumberFormatException e) { // variable/label
+            int num = SymbolTable.getSymbol(symbol);
+            // System.out.println(symbol + " is found in Symbol Table at pos: " +
+            // SymbolTable.getSymbol(symbol));
+            while (num > 0) {
+                binary = String.valueOf(num % 2) + binary;
+                num = num / 2;
+            }
+            // turn n-bits binary into 16-bits
+            int diff = 15 - binary.length();
+            for (int i = 0; i < diff; i++) {
+                binary = "0" + binary;
+            }
+            return binary;
+        }
     }
 
-    /** 
+    /**
      * A quick-and-dirty driver when run standalone.
-     * When testing your code, we encourage you to also write your own classes to check
+     * When testing your code, we encourage you to also write your own classes to
+     * check
      * individual functions as the autograder will do
      */
     public static void main(String[] args) {
